@@ -1,6 +1,6 @@
 function block_processing_large_images
     % === Create GUI Figure ===
-    fig = figure('Name','Edge Detection GUI',...
+    figure('Name','Edge Detection GUI',...
                  'NumberTitle','off',...
                  'Position',[500 300 300 200],...
                  'Resize','off');
@@ -100,39 +100,69 @@ function runVideoCode(~,~)
 
     v = VideoReader(video_file);
 
+    %% Choose edge detection method
+    methods = {'Canny','Sobel','Roberts','Prewitt','Laplacian'};
+    [idx, tf] = listdlg( ...
+        'PromptString','Válassz éldetektálást:', ...
+        'SelectionMode','single', ...
+        'ListString',methods);
+
+    if ~tf
+        disp('No edge detection selected.');
+        return;
+    end
+
+    selectedMethod = methods{idx};
+
     %% Parameters
     thresh = 0.09;
     block_size  = [50 50];
     border_size = [10 10];
 
-    %% Edge functions (same as image processing)
-    edgeCanny     = @(b) edge(b.data,"canny",thresh);
-    edgeSobel     = @(b) edge(b.data,"sobel");
-    edgeRoberts   = @(b) edge(b.data,"roberts");
-    edgePrewitt   = @(b) edge(b.data,"prewitt");
-    edgeLaplacian = @(b) edge(b.data,"log");
+    %% Select edge function
+    switch selectedMethod
+        case 'Canny'
+            edgeFun = @(b) edge(b.data,"canny",thresh);
+        case 'Sobel'
+            edgeFun = @(b) edge(b.data,"sobel");
+        case 'Roberts'
+            edgeFun = @(b) edge(b.data,"roberts");
+        case 'Prewitt'
+            edgeFun = @(b) edge(b.data,"prewitt");
+        case 'Laplacian'
+            edgeFun = @(b) edge(b.data,"log");
+    end
 
-    %% Create output videos
-    vw_canny     = VideoWriter('video_canny.avi',     'Uncompressed AVI');
-    vw_sobel     = VideoWriter('video_sobel.avi',     'Uncompressed AVI');
-    vw_roberts   = VideoWriter('video_roberts.avi',   'Uncompressed AVI');
-    vw_prewitt   = VideoWriter('video_prewitt.avi',   'Uncompressed AVI');
-    vw_laplacian = VideoWriter('video_laplacian.avi', 'Uncompressed AVI');
-    
-    vw_canny.FrameRate     = v.FrameRate;
-    vw_sobel.FrameRate     = v.FrameRate;
-    vw_roberts.FrameRate   = v.FrameRate;
-    vw_prewitt.FrameRate   = v.FrameRate;
-    vw_laplacian.FrameRate = v.FrameRate;
+    %% Create output video
+    outputName = ['video_' lower(selectedMethod) '.avi'];
+    vw = VideoWriter(outputName, 'Uncompressed AVI');
+    vw.FrameRate = v.FrameRate;
+    open(vw);
 
-    open(vw_canny);
-    open(vw_sobel);
-    open(vw_roberts);
-    open(vw_prewitt);
-    open(vw_laplacian);
+    %% Create display figure
+    figure('Name',['Video Edge Detection - ' selectedMethod], ...
+                      'NumberTitle','off');
 
-    %% Process video
-    while hasFrame(v)
+    firstFrame = readFrame(v);
+    if size(firstFrame,3) == 3
+        gray = rgb2gray(firstFrame);
+    else
+        gray = firstFrame;
+    end
+
+    edges = blockproc(gray, block_size, edgeFun, "BorderSize", border_size);
+    frame_out = repmat(im2uint8(edges), [1 1 3]);
+    frame_out = makeEvenSize(frame_out);
+
+    hImg = imshow(frame_out);
+    drawnow;
+
+    %% Write first frame
+    writeVideo(vw, frame_out);
+
+    %% Process remaining frames
+    while hasFrame(v) && ishandle(hImg)
+
         frame = readFrame(v);
 
         % Convert to grayscale
@@ -143,43 +173,26 @@ function runVideoCode(~,~)
         end
 
         % Block-wise edge detection
-        canny     = blockproc(gray, block_size, edgeCanny,     "BorderSize",border_size);
-        sobel     = blockproc(gray, block_size, edgeSobel,     "BorderSize",border_size);
-        roberts   = blockproc(gray, block_size, edgeRoberts,   "BorderSize",border_size);
-        prewitt   = blockproc(gray, block_size, edgePrewitt,   "BorderSize",border_size);
-        laplacian = blockproc(gray, block_size, edgeLaplacian, "BorderSize",border_size);
+        edges = blockproc(gray, block_size, edgeFun, ...
+                          "BorderSize", border_size);
 
-        % Write frames
-        frame_out = repmat(im2uint8(canny), [1 1 3]);
+        frame_out = repmat(im2uint8(edges), [1 1 3]);
         frame_out = makeEvenSize(frame_out);
-        writeVideo(vw_canny, frame_out);
-        frame_out = repmat(im2uint8(sobel), [1 1 3]);
-        frame_out = makeEvenSize(frame_out);
-        writeVideo(vw_sobel, frame_out);
-        frame_out = repmat(im2uint8(roberts), [1 1 3]);
-        frame_out = makeEvenSize(frame_out);
-        writeVideo(vw_roberts, frame_out);
-        frame_out = repmat(im2uint8(prewitt), [1 1 3]);
-        frame_out = makeEvenSize(frame_out);
-        writeVideo(vw_prewitt, frame_out);
-        frame_out = repmat(im2uint8(laplacian), [1 1 3]);
-        frame_out = makeEvenSize(frame_out);
-        writeVideo(vw_laplacian, frame_out);
+
+        % Display in GUI
+        set(hImg, 'CData', frame_out);
+        drawnow;
+
+        % Save frame
+        writeVideo(vw, frame_out);
     end
 
-    %% Close videos
-    close(vw_canny);
-    close(vw_sobel);
-    close(vw_roberts);
-    close(vw_prewitt);
-    close(vw_laplacian);
+    %% Close video
+    close(vw);
 
-    disp("All edge-detected videos saved:");
-    disp(" - video_canny.avi");
-    disp(" - video_sobel.avi");
-    disp(" - video_roberts.avi");
-    disp(" - video_prewitt.avi");
-    disp(" - video_laplacian.avi");
+    disp("Edge-detected video saved:");
+    disp(outputName);
+
 end
 
 function out = makeEvenSize(img)
