@@ -105,7 +105,8 @@ function runVideoCode(~,~)
     [idx, tf] = listdlg( ...
         'PromptString','Válassz éldetektálást:', ...
         'SelectionMode','single', ...
-        'ListString',methods);
+        'ListString',methods, ...
+        'ListSize', [150, 70]);
 
     if ~tf
         disp('No edge detection selected.');
@@ -154,7 +155,9 @@ function runVideoCode(~,~)
     frame_out = repmat(im2uint8(edges), [1 1 3]);
     frame_out = makeEvenSize(frame_out);
 
+    hAx  = gca;                      % axes handle
     hImg = imshow(frame_out);
+    title(hAx, selectedMethod, 'FontSize', 14, 'FontWeight','bold');
     drawnow;
 
     %% Write first frame
@@ -181,6 +184,7 @@ function runVideoCode(~,~)
 
         % Display in GUI
         set(hImg, 'CData', frame_out);
+        title(hAx, selectedMethod, 'FontSize', 14, 'FontWeight','bold');
         drawnow;
 
         % Save frame
