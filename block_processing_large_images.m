@@ -4,13 +4,11 @@ function block_processing_large_images
                  'NumberTitle','off',...
                  'Position',[500 300 300 200],...
                  'Resize','off');
-
     uicontrol('Style','pushbutton',...
               'String','Image Edge Detection',...
               'FontSize',12,...
               'Position',[50 120 200 50],...
               'Callback',@runImageCode);
-
     uicontrol('Style','pushbutton',...
               'String','Video Edge Detection',...
               'FontSize',12,...
@@ -18,12 +16,10 @@ function block_processing_large_images
               'Callback',@runVideoCode);
 end
 
-
 %% ------------------------------------------------------------------------
 %% --- IMAGE EDGE DETECTION (BUTTON 1) -----------------------------------
 %% ------------------------------------------------------------------------
 function runImageCode(~,~)
-
     %% Pick an image
     [filename, pathname] = uigetfile({'*.png;*.jpg;*.jpeg;*.bmp;*.tif',...
                                       'Képfájlok (*.png, *.jpg, *.jpeg, *.bmp, *.tif)'});
@@ -31,10 +27,33 @@ function runImageCode(~,~)
         disp('No file selected.');
         return;
     end
+    
+    %% --- NEW: Method selection window ---
+    d = dialog('Position', [300 300 280 220], 'Name', 'Válassz metódust');
+    uicontrol('Parent', d, 'Style', 'text', 'Position', [20 180 160 30], ...
+              'String', 'Válassz éldetektálást:', 'FontSize', 10);
+    
+    selectedMethod = '';
+    methods = {'Canny','Sobel','Roberts','Prewitt','Laplacian'};
+    
+    for i = 1:length(methods)
+        uicontrol('Parent', d, 'Style', 'pushbutton', ...
+            'Position', [40 170-i*30 120 25], ...
+            'String', methods{i}, ...
+            'Callback', @(src, event) assignAndClose(methods{i}));
+    end
+    
+    function assignAndClose(m)
+        selectedMethod = m;
+        delete(d);
+    end
+    
+    uiwait(d); 
+    if isempty(selectedMethod), return; end 
+
+    %% Image loading and grayscale conversion
     file_name = fullfile(pathname, filename);
     I = imread(file_name);
-
-    %% Convert to grayscale for edge detection
     if size(I,3) == 3
         Igray = rgb2gray(I);
     else
@@ -46,41 +65,36 @@ function runImageCode(~,~)
     block_size = [100 100];
     border_size = [10 10];
 
-    %% Block-wise edge detection functions
-    canny     = blockproc(Igray, block_size, @(b) edge(b.data,"canny",thresh), "BorderSize",border_size);
-    sobel     = blockproc(Igray, block_size, @(b) edge(b.data,"sobel"),         "BorderSize",border_size);
-    roberts   = blockproc(Igray, block_size, @(b) edge(b.data,"roberts"),       "BorderSize",border_size);
-    prewitt   = blockproc(Igray, block_size, @(b) edge(b.data,"prewitt"),       "BorderSize",border_size);
-    laplacian = blockproc(Igray, block_size, @(b) edge(b.data,"log"),           "BorderSize",border_size);
-
-
-    %% --- Display results ---
-    figure;
-    subplot(2,3,1), imshow(I), title("Original");
-    subplot(2,3,2), imshow(canny), title("Canny");
-    subplot(2,3,3), imshow(sobel), title("Sobel");
-    subplot(2,3,4), imshow(roberts), title("Roberts");
-    subplot(2,3,5), imshow(prewitt), title("Prewitt");
-    subplot(2,3,6), imshow(laplacian), title("Laplacian");
-
-    %% Optional objective metric comparison
-    try
-        [psnr_canny,    ssim_canny]    = compare_metrics(I, canny);
-        [psnr_sobel,    ssim_sobel]    = compare_metrics(I, sobel);
-        [psnr_roberts,  ssim_roberts]  = compare_metrics(I, roberts);
-        [psnr_prewitt,  ssim_prewitt]  = compare_metrics(I, prewitt);
-        [psnr_laplacian,ssim_laplacian]= compare_metrics(I, laplacian);
-
-        fprintf('PSNR és SSIM értékek:\n');
-        fprintf('Canny: PSNR = %.2f, SSIM = %.3f\n', psnr_canny, ssim_canny);
-        fprintf('Sobel: PSNR = %.2f, SSIM = %.3f\n', psnr_sobel, ssim_sobel);
-        fprintf('Roberts: PSNR = %.2f, SSIM = %.3f\n', psnr_roberts, ssim_roberts);
-        fprintf('Prewitt: PSNR = %.2f, SSIM = %.3f\n', psnr_prewitt, ssim_prewitt);
-        fprintf('Laplacian: PSNR = %.2f, SSIM = %.3f\n', psnr_laplacian, ssim_laplacian);
-    catch
-        warning('compare_metrics function not found or error occurred.');
+    %% Selecting an edge detection function
+    switch selectedMethod
+        case 'Canny'
+            edgeFun = @(b) edge(b.data,"canny",thresh);
+        case 'Sobel'
+            edgeFun = @(b) edge(b.data,"sobel");
+        case 'Roberts'
+            edgeFun = @(b) edge(b.data,"roberts");
+        case 'Prewitt'
+            edgeFun = @(b) edge(b.data,"prewitt");
+        case 'Laplacian'
+            edgeFun = @(b) edge(b.data,"log");
     end
 
+    %% Processing with blockproc (runs only the selected one)
+    processedImg = blockproc(Igray, block_size, edgeFun, "BorderSize", border_size);
+
+    %% --- Show result ---
+    figure('Name', ['Edge Detection Result - ' selectedMethod]);
+    subplot(1,2,1), imshow(I), title("Original");
+    subplot(1,2,2), imshow(processedImg), title(selectedMethod);
+
+    %% Metric calculation
+    try
+        [psnr_val, ssim_val] = compare_metrics(I, processedImg);
+        fprintf('\nEredmények (%s):\n', selectedMethod);
+        fprintf('PSNR = %.2f\nSSIM = %.3f\n', psnr_val, ssim_val);
+    catch
+        warning('Hiba a metrikák számításakor.');
+    end
 end
 
 
@@ -108,7 +122,7 @@ function runVideoCode(~,~)
     selectedMethod = '';
     methods = {'Canny','Sobel','Roberts','Prewitt','Laplacian'};
     
-    % Availability of buttons
+    % Creating buttons
     for i = 1:length(methods)
         uicontrol('Parent', d, 'Style', 'pushbutton', ...
             'Position', [40 170-i*30 120 25], ...
@@ -123,7 +137,7 @@ function runVideoCode(~,~)
     end
 
     uiwait(d); % Wait until the window closes
-    if isempty(selectedMethod), return; end % Ha csak bezárta az ablakot
+    if isempty(selectedMethod), return; end % If only you had closed the window
 
     %% Parameters
     thresh = 0.09;
