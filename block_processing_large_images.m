@@ -108,7 +108,7 @@ function runVideoCode(~,~)
     selectedMethod = '';
     methods = {'Canny','Sobel','Roberts','Prewitt','Laplacian'};
     
-    % Gombok létrehozása
+    % Availability of buttons
     for i = 1:length(methods)
         uicontrol('Parent', d, 'Style', 'pushbutton', ...
             'Position', [40 170-i*30 120 25], ...
@@ -116,13 +116,13 @@ function runVideoCode(~,~)
             'Callback', @(src, event) assignAndClose(methods{i}));
     end
 
-    % Segédfüggvény a választáshoz
+    % Helper function for selection
     function assignAndClose(m)
         selectedMethod = m;
         delete(d);
     end
 
-    uiwait(d); % Vár az ablak bezárásáig
+    uiwait(d); % Wait until the window closes
     if isempty(selectedMethod), return; end % Ha csak bezárta az ablakot
 
     %% Parameters
