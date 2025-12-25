@@ -100,20 +100,30 @@ function runVideoCode(~,~)
 
     v = VideoReader(video_file);
 
-    %% Choose edge detection method
+    %% Choose edge detection method (Egyedi ablak listdlg helyett)
+    d = dialog('Position', [300 300 280 220], 'Name', 'Válassz metódust');
+    uicontrol('Parent', d, 'Style', 'text', 'Position', [20 180 160 30], ...
+              'String', 'Válassz éldetektálást:', 'FontSize', 10);
+    
+    selectedMethod = '';
     methods = {'Canny','Sobel','Roberts','Prewitt','Laplacian'};
-    [idx, tf] = listdlg( ...
-        'PromptString','Válassz éldetektálást:', ...
-        'SelectionMode','single', ...
-        'ListString',methods, ...
-        'ListSize', [150, 70]);
-
-    if ~tf
-        disp('No edge detection selected.');
-        return;
+    
+    % Gombok létrehozása
+    for i = 1:length(methods)
+        uicontrol('Parent', d, 'Style', 'pushbutton', ...
+            'Position', [40 170-i*30 120 25], ...
+            'String', methods{i}, ...
+            'Callback', @(src, event) assignAndClose(methods{i}));
     end
 
-    selectedMethod = methods{idx};
+    % Segédfüggvény a választáshoz
+    function assignAndClose(m)
+        selectedMethod = m;
+        delete(d);
+    end
+
+    uiwait(d); % Vár az ablak bezárásáig
+    if isempty(selectedMethod), return; end % Ha csak bezárta az ablakot
 
     %% Parameters
     thresh = 0.09;
